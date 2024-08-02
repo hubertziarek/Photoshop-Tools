@@ -22,21 +22,16 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(main_widget)
         main_layout = QVBoxLayout(main_widget)
 
-        label = QLabel(self.directory_name.absolutePath())
+        label = QLabel("PHOTOSHOP")
         main_layout.addWidget(label)
 
+        load_images_button = QPushButton("Load images")
+        load_images_button.clicked.connect(self.add_images_as_layers)
+        main_layout.addWidget(load_images_button)
 
-        doit = QPushButton("Do it")
-        doit.clicked.connect(self.add_images_as_layers)
-        main_layout.addWidget(doit)
-
-        choose_the_file = QPushButton("Choose the PS file")
-        choose_the_file.clicked.connect(self.select_PS_file)
-        main_layout.addWidget(choose_the_file)
-        
-        run_PS = QPushButton("Run PS")
-        run_PS.clicked.connect(self.run_PS)
-        main_layout.addWidget(run_PS)
+        export_button = QPushButton("Export images")
+        export_button.clicked.connect(self.export_JS)
+        main_layout.addWidget(export_button)
 
         close = QPushButton("Close")
         close.pressed.connect(self.close)
@@ -45,37 +40,22 @@ class MainWindow(QMainWindow):
         self.show()
 
     #selecting directory
-    def doit_clicked(self):
-        #dialog = QFileDialog(self)
-        #dialog.setFileMode(QFileDialog.Directory)
-        #dialog.setDirectory(QDir("D:\\Orders"))
-        #if dialog.exec():
-        #    self.directory_name = dialog.directory()
-        with Session() as ps:
-            desc = ps.ActionDescriptor
-            desc.putPath(ps.app.charIDToTypeID("null"), "D:\\Orders\\Andy_thorny_brambles\\thorny_brambles_v1\\arch_1.png")
-            event_id = ps.app.charIDToTypeID("Plc ")  # `Plc` need one space in here.
-            ps.app.executeAction(ps.app.charIDToTypeID("Plc "), desc)
-
-    #selecting PS file to modify
-    def select_PS_file(self):
+    def choose_directory(self, starting_path):
         dialog = QFileDialog(self)
-        dialog.setFileMode(QFileDialog.ExistingFile)
-        dialog.setNameFilter("*.psd")
-        dialog.setDirectory(QDir("D:\\Orders"))
+        dialog.setFileMode(QFileDialog.Directory)
+        dialog.setDirectory(QDir(starting_path))
         if dialog.exec():
-            self.PS_file_name = dialog.selectedFiles()
-
-    def run_PS(self):
-        #print (self.PS_file_name[0])
-        psApp = win32com.client.Dispatch("Photoshop.Application")
-        #psApp.Open(self.PS_file_name[0])
-        psApp.Open("D:\\Orders\\test\\andy_extras.psd")
+            print(dialog.directory().path())
+            return dialog.directory().path()
+        else:
+            return None
 
 
     def add_images_as_layers (self):
-        #trzeba dodać autościeżkę przy pomocy pathliba, na razie idziemy na sztywno
-        directory_path = "D:\\Orders\\test\\renders\\"
+        directory_path = self.choose_directory("D:\\Orders") + "/"
+        if directory_path == None:
+            return
+        
         images_to_import = [f for f in os.listdir(directory_path) if f.rsplit(".", 1)[1] == "png"]
         groups_to_create = [g.rsplit(".", 1)[0] for g in images_to_import if re.search(".*_lineart.png", g) == None]
         
@@ -90,9 +70,8 @@ class MainWindow(QMainWindow):
             layers = doc.artLayers
             for layer in layers:
                 if re.search(".*_lineart", layer.name) != None:
-                    #self.addLayerMask(layer)
                     doc.activeLayer = layer
-                    self.moveMe(layer)
+                    self.add_layer_mask()
 
             
             for g in groups_to_create:
@@ -104,48 +83,21 @@ class MainWindow(QMainWindow):
                 new_layer = new_layer_set.artLayers.add()
                 new_layer.name = "fixes"
             
+                #move layers to a new group
                 layers = doc.artLayers
                 layers_to_move = list()
                 for layer in layers:
-                    if layer.name == g or layer.name == g + "_lineart":
+                    if re.search(g, layer.name) != None:
                         layers_to_move.append(layer)
 
                 for o in layers_to_move:
                     o.moveToEnd(new_layer_set)
 
-
-    def experiments(self):
-        pass
-
-    def addLayerMask(self, layer):
-        print ("I AM")
+    def add_layer_mask(self):
         with Session() as ps:
             app = ps.app
-
-            print("Active: " + app.activeDocument.activeLayer.name)
-            
-            descriptor = ps.ActionDescriptor()
-            reference = ps.ActionReference()
-
-            ref = ps.ActionReference()
-            ref.putEnumerated(app.stringIDToTypeID("layer"), app.stringIDToTypeID("ordinal"), app.stringIDToTypeID("targetEnum"))
-            descriptor.putReference(app.stringIDToTypeID("target"),  ref)
-
-            descriptor.putClass( app.stringIDToTypeID( "new" ), app.stringIDToTypeID( "channel" ))
-            reference.putEnumerated( app.stringIDToTypeID( "channel" ), app.stringIDToTypeID( "channel" ), app.stringIDToTypeID( "mask" ))
-            descriptor.putReference( app.stringIDToTypeID( "at" ), reference )
-            descriptor.putEnumerated( app.stringIDToTypeID( "using" ), app.stringIDToTypeID( "userMaskEnabled" ), app.stringIDToTypeID( "revealAll" ))
-            
-            app.executeAction( app.stringIDToTypeID( "make" ), descriptor, ps.DialogModes.DisplayNoDialogs )
-
-    def moveMe(self, layer):
-        with Session() as ps:
-            app = ps.app
-
-            print("Active: " + app.activeDocument.activeLayer.name)
             
             idMk = app.charIDToTypeID("Mk  ")
-            
             desc2 = ps.ActionDescriptor()
             idNw = app.charIDToTypeID("Nw  ")
             idChnl = app.charIDToTypeID("Chnl")
@@ -163,7 +115,88 @@ class MainWindow(QMainWindow):
             desc2.putEnumerated(idUsng, idUsrM, idRvlA)
             app.executeAction(idMk, desc2, ps.DialogModes.DisplayNoDialogs)
 
+    def hide_all_layers(self, layers):
+        for layer in layers:
+            layer.visible = False
+    
+    def export(self):       
+        with Session() as ps:
+            doc = ps.active_document
+            
+            directory_path = self.choose_directory(doc.path) + "/"
+            if directory_path == None:
+                return
 
+            #merging groups into layers
+            groups = doc.layerSets
+            duplicated_groups = list()
+            for group in groups:
+                duplicated_groups.append(group)  
+                #group.merge()
+
+            for g in duplicated_groups:
+                g.merge()
+            
+            #export options
+            options = ps.PNGSaveOptions()
+            options.compression = 1
+            
+            layers = doc.artLayers
+            for layer in layers:
+                if re.search(".{1}ackground", layer.name) != None:
+                    continue
+
+                self.hide_all_layers(layers)
+                layer.visible = True
+                print(directory_path)
+                if not os.path.exists(directory_path):
+                    ps.alert("Directory doesn't exist!")
+                    return
+                image_path = os.path.join(directory_path, f"{layer.name}.png")
+                doc.saveAs(image_path, options=options, asCopy=True)
+
+    def export_JS(self):
+        with Session() as ps:
+            doc = ps.active_document
+            
+            directory_path = self.choose_directory(doc.path) + "/"
+            if directory_path == None:
+                return
+            
+            layers = doc.artLayers
+            for layer in layers:
+                if re.search(".{1}ackground", layer.name) != None:
+                    continue
+
+                #print(directory_path)
+                if not os.path.exists(directory_path):
+                    ps.alert("Directory doesn't exist!")
+                    return
+                
+                doc.activeLayer = layer
+                self.export_JS_layer(directory_path)
+
+    def export_JS_layer(self, path):
+        with Session() as ps:
+            app = ps.app
+
+            print (ps.active_document.activeLayer.name)
+
+            d = ps.ActionDescriptor()
+            r = ps.ActionReference()
+
+            r.putEnumerated(app.stringIDToTypeID("layer"), app.stringIDToTypeID("ordinal"), app.stringIDToTypeID("targetEnum"))
+            d.putReference(app.stringIDToTypeID("null"), r)
+            d.putString(app.stringIDToTypeID("fileType"), "png")
+            d.putInteger(app.stringIDToTypeID("quality"), 32)
+            d.putInteger(app.stringIDToTypeID("metadata"), 0)
+            d.putString(app.stringIDToTypeID("destFolder"), path)
+            d.putBoolean(app.stringIDToTypeID("sRGB"), True)
+            d.putBoolean(app.stringIDToTypeID("openWindow"), False)
+
+            app.executeAction(app.stringIDToTypeID("exportSelectionAsFileTypePressed"), d, ps.DialogModes.DisplayNoDialogs)
+            #app.executeAction(app.stringIDToTypeID("exportDocumentAsFileTypePressed"), d, ps.DialogModes.DisplayNoDialogs)
+            
 
 app = QApplication(sys.argv)
 w = MainWindow()
