@@ -29,8 +29,16 @@ class MainWindow(QMainWindow):
         load_images_button.clicked.connect(self.add_images_as_layers)
         main_layout.addWidget(load_images_button)
 
+        merge_groups_button = QPushButton("Merge groups")
+        merge_groups_button.clicked.connect(self.merge_groups)
+        main_layout.addWidget(merge_groups_button)
+
+        export_squares_button = QPushButton("Export squares")
+        export_squares_button.clicked.connect(self.export_squares)
+        main_layout.addWidget(export_squares_button)
+
         export_button = QPushButton("Export images")
-        export_button.clicked.connect(self.export_JS)
+        export_button.clicked.connect(self.export)
         main_layout.addWidget(export_button)
 
         close = QPushButton("Close")
@@ -49,7 +57,6 @@ class MainWindow(QMainWindow):
             return dialog.directory().path()
         else:
             return None
-
 
     def add_images_as_layers (self):
         directory_path = self.choose_directory("D:\\Orders") + "/"
@@ -87,7 +94,8 @@ class MainWindow(QMainWindow):
                 layers = doc.artLayers
                 layers_to_move = list()
                 for layer in layers:
-                    if re.search(g, layer.name) != None:
+                    #if re.search(g, layer.name) != None:
+                    if g == layer.name or g + "_lineart" == layer.name:
                         layers_to_move.append(layer)
 
                 for o in layers_to_move:
@@ -115,17 +123,9 @@ class MainWindow(QMainWindow):
             desc2.putEnumerated(idUsng, idUsrM, idRvlA)
             app.executeAction(idMk, desc2, ps.DialogModes.DisplayNoDialogs)
 
-    def hide_all_layers(self, layers):
-        for layer in layers:
-            layer.visible = False
-    
-    def export(self):       
+    def merge_groups(self):
         with Session() as ps:
             doc = ps.active_document
-            
-            directory_path = self.choose_directory(doc.path) + "/"
-            if directory_path == None:
-                return
 
             #merging groups into layers
             groups = doc.layerSets
@@ -136,6 +136,18 @@ class MainWindow(QMainWindow):
 
             for g in duplicated_groups:
                 g.merge()
+
+    def hide_all_layers(self, layers):
+        for layer in layers:
+            layer.visible = False
+    
+    def export_squares(self):       
+        with Session() as ps:
+            doc = ps.active_document
+            
+            directory_path = self.choose_directory(doc.path) + "/"
+            if directory_path == None:
+                return
             
             #export options
             options = ps.PNGSaveOptions()
@@ -143,7 +155,7 @@ class MainWindow(QMainWindow):
             
             layers = doc.artLayers
             for layer in layers:
-                if re.search(".{1}ackground", layer.name) != None:
+                if re.search(".{1}ackground", layer.name) != None or re.search(".{1}ayer", layer.name) != None:
                     continue
 
                 self.hide_all_layers(layers)
@@ -155,7 +167,7 @@ class MainWindow(QMainWindow):
                 image_path = os.path.join(directory_path, f"{layer.name}.png")
                 doc.saveAs(image_path, options=options, asCopy=True)
 
-    def export_JS(self):
+    def export(self):
         with Session() as ps:
             doc = ps.active_document
             
@@ -165,7 +177,7 @@ class MainWindow(QMainWindow):
             
             layers = doc.artLayers
             for layer in layers:
-                if re.search(".{1}ackground", layer.name) != None:
+                if re.search(".{1}ackground", layer.name) != None or re.search(".{1}ayer", layer.name) != None:
                     continue
 
                 #print(directory_path)
@@ -174,9 +186,9 @@ class MainWindow(QMainWindow):
                     return
                 
                 doc.activeLayer = layer
-                self.export_JS_layer(directory_path)
+                self.export_layer(directory_path)
 
-    def export_JS_layer(self, path):
+    def export_layer(self, path):
         with Session() as ps:
             app = ps.app
 
