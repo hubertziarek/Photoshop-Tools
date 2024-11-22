@@ -29,6 +29,10 @@ class MainWindow(QMainWindow):
         load_images_button.clicked.connect(self.add_images_as_layers)
         main_layout.addWidget(load_images_button)
 
+        add_background_button = QPushButton("Add background")
+        add_background_button.clicked.connect(self.add_background)
+        main_layout.addWidget(add_background_button)
+
         merge_groups_button = QPushButton("Merge groups")
         merge_groups_button.clicked.connect(self.merge_groups)
         main_layout.addWidget(merge_groups_button)
@@ -59,16 +63,19 @@ class MainWindow(QMainWindow):
             return None
 
     def add_images_as_layers (self):
-        directory_path = self.choose_directory("D:\\Orders") + "/"
+        directory_path = self.choose_directory("D:\\Orders")
         if directory_path == None:
             return
+
+        directory_path = directory_path + "/"
         
         images_to_import = [f for f in os.listdir(directory_path) if f.rsplit(".", 1)[1] == "png"]
         groups_to_create = [g.rsplit(".", 1)[0] for g in images_to_import if re.search(".*_lineart.png", g) == None]
-        
+
         with Session() as ps:
             doc = ps.active_document
             for image in images_to_import:
+                print (image)
                 desc = ps.ActionDescriptor
                 desc.putPath(ps.app.charIDToTypeID("null"), directory_path + image)
                 ps.app.executeAction(ps.app.charIDToTypeID("Plc "), desc)
@@ -208,6 +215,60 @@ class MainWindow(QMainWindow):
 
             app.executeAction(app.stringIDToTypeID("exportSelectionAsFileTypePressed"), d, ps.DialogModes.DisplayNoDialogs)
             #app.executeAction(app.stringIDToTypeID("exportDocumentAsFileTypePressed"), d, ps.DialogModes.DisplayNoDialogs)
+    
+    def add_background (self):
+        directory_path = self.choose_directory("D:\\Orders")
+        if directory_path == None:
+            return
+
+        directory_path = directory_path + "/"
+        
+        images_to_import = [f for f in os.listdir(directory_path) if f.rsplit(".", 1)[1] == "png"]
+        groups_to_create = [g.rsplit(".", 1)[0] for g in images_to_import if re.search(".*_lineart.png", g) == None]
+
+        with Session() as ps:
+            doc = ps.active_document
+            for image in images_to_import:
+                print (image)
+                desc = ps.ActionDescriptor
+                desc.putPath(ps.app.charIDToTypeID("null"), directory_path + image)
+                ps.app.executeAction(ps.app.charIDToTypeID("Plc "), desc)
+
+            
+            for g in groups_to_create:
+                # Add a new layerSet.
+                new_layer_set = doc.layerSets.add()
+                # Rename the layerSet.
+                new_layer_set.name = g
+            
+                #move layers to a new group
+                layers = doc.artLayers
+                layers_to_move = list()
+                for layer in layers:
+                    #if re.search(g, layer.name) != None:
+                    if g == layer.name or g + "_lineart" == layer.name:
+                        layers_to_move.append(layer)
+
+                for o in layers_to_move:
+                    o.moveToEnd(new_layer_set)
+
+                #add background layer
+                new_layer = new_layer_set.artLayers.add()
+                new_layer.name = "back"
+
+                fillColor = ps.SolidColor()
+                fillColor.rgb.red = 11
+                fillColor.rgb.green = 16
+                fillColor.rgb.blue = 21
+
+                # Select the entire layer.
+                doc.selection.selectAll()
+                # Fill the selection with color.
+                doc.selection.fill(fillColor)
+                # Deselect.
+                doc.selection.deselect()
+
+                new_layer.moveToEnd(new_layer_set)
             
 
 app = QApplication(sys.argv)
